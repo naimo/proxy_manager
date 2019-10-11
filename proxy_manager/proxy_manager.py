@@ -91,7 +91,12 @@ class Proxy():
                                     proxies={"http":proxy_url, "https":proxy_url}, timeout=5)
         except:
             return False
-        return response.json()['origin'].split(',')[0] == self.host
+        ip_check = response.json()['origin'].split(',')[0] == self.host
+        if ip_check:
+            self.succeed()
+        else:
+            self.fail()
+        return ip_check
 
 if __name__ == "__main__":
     # proxies = ["108.61.186.207:8080","118.27.31.50:3128","5.196.132.117:3128"]
