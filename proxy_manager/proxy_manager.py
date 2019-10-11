@@ -74,17 +74,17 @@ class Proxy():
     def stats(self):
         total = self.successes+self.fails
         if total>0:
-            fail_ratio = self.fails/(self.successes+self.fails)
+            success_ratio = self.fails/(self.successes+self.fails)
         else:
-            fail_ratio = 0
-        return fail_ratio,self.consecutive_fails
+            success_ratio = 0
+        return success_ratio,self.consecutive_fails
 
     def last_ban_hours(self):
         if self.is_banned():
             ban_hours = (datetime.datetime.now() - self.bans[-1]).seconds/3600
             return ban_hours
 
-    def test_proxy(self):
+    def test(self):
         proxy_url = self.get_url()
         try:
             response = requests.get("http://httpbin.org/ip",
@@ -100,7 +100,7 @@ if __name__ == "__main__":
 
     random_proxy = proxymanager.get_random_proxy()
 
-    print(random_proxy, random_proxy.test_proxy())
+    print(random_proxy, random_proxy.test())
     print(random_proxy.is_banned())
     random_proxy.ban()
     print(random_proxy.is_banned(), random_proxy.last_ban_hours())
