@@ -74,9 +74,9 @@ class Proxy():
     def stats(self):
         total = self.successes+self.fails
         if total>0:
-            success_ratio = self.fails/(self.successes+self.fails)
+            success_ratio = self.successes/(self.successes+self.fails)
         else:
-            success_ratio = 0
+            success_ratio = 1
         return success_ratio,self.consecutive_fails
 
     def last_ban_hours(self):
