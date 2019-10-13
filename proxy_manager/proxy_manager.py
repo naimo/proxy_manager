@@ -1,5 +1,7 @@
 """This module helps cycling proxies for web scraping applications"""
 
+import json
+
 import random
 import requests
 import datetime
@@ -89,7 +91,18 @@ class Proxy():
         try:
             response = requests.get("http://httpbin.org/ip",
                                     proxies={"http":proxy_url, "https":proxy_url}, timeout=5)
-        except:
+            response_json = response.json()
+        except json.decoder.JSONDecodeError:
+            print("Json error %s" % response.text)
+            return False
+        except requests.exceptions.ConnectTimeout:
+            print("Request timeout error")
+            return False
+        except requests.exceptions.ProxyError as error:
+            print("Proxy error : {0}".format(error.strerror))
+            return False
+        except requests.exceptions.ReadTimeout:
+            print("Server timeout")
             return False
         ip_check = response.json()['origin'].split(',')[0] == self.host
         if ip_check:
