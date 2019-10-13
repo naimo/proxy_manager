@@ -89,7 +89,7 @@ class Proxy():
         proxy = cls()
         proxy.__dict__.update(dictionary)
         # transform datetime strings back to datetimes
-        proxy.bans = [datetime.datetime.fromisoformat(ban) if ban else None for ban in proxy.bans]
+        proxy.bans = [datetime.datetime.strptime(ban, "%Y-%m-%d %H:%M:%S.%f") if ban else None for ban in proxy.bans]
         return proxy
 
     def __eq__(self, other):
