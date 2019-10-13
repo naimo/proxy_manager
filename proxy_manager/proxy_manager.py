@@ -1,76 +1,96 @@
 """This module helps cycling proxies for web scraping applications"""
 
 import json
-
-import random
-import requests
 import datetime
+import random
+import logging
+import requests
+
+LOGGER = logging.getLogger("proxy_manager")
+LOGGER.setLevel('INFO')
+LOGGER.addHandler(logging.StreamHandler())
 
 class ProxyManager():
+    CONSECUTIVE_FAIL_LIMIT = 5
+
     """Holds a list of proxies and handling tools"""
-    def __init__(self, good_proxy_list):
+    def __init__(self, good_proxy_list, good_filename, bad_filename, banned_filename):
         # for now assume we just instanciate with good proxies
         self.good_proxies = [Proxy(h, p) for (h, p) in [p.split(':') for p in good_proxy_list]]
         self.bad_proxies = []
         self.banned_proxies = []
-        
+        self.good_filename = good_filename
+        self.bad_filename = bad_filename
+        self.banned_filename = banned_filename
+
     @classmethod
-    def from_csv(cls, filename):
+    def from_csv(cls, filename, good_filename, bad_filename, banned_filename):
         # for now assume we just import good proxies from CSV
         with open(filename) as proxy_file:
             content = proxy_file.readlines()
         content = [x.strip() for x in content]
-        return cls(content)      
+        return cls(content, good_filename, bad_filename, banned_filename)
 
     @classmethod
     def import_proxy_manager(cls, good_filename, bad_filename, banned_filename):
-        pm = cls([])
+        proxy_manager = cls([], good_filename, bad_filename, banned_filename)
         with open(good_filename) as proxy_import:
             for line in proxy_import.readlines():
-                pm.good_proxies.append(Proxy.import_proxy(line))
+                proxy_manager.good_proxies.append(Proxy.import_proxy(line))
         with open(bad_filename) as proxy_import:
             for line in proxy_import.readlines():
-                pm.bad_proxies.append(Proxy.import_proxy(line))
+                proxy_manager.bad_proxies.append(Proxy.import_proxy(line))
         with open(banned_filename) as proxy_import:
             for line in proxy_import.readlines():
-                pm.banned_proxies.append(Proxy.import_proxy(line))
-        return pm
+                proxy_manager.banned_proxies.append(Proxy.import_proxy(line))
+        return proxy_manager
 
-    def export_proxy_manager(self, good_filename, bad_filename, banned_filename):
-        with open(good_filename, 'w') as export_file:
-            export_file.write('\n'.join([str(p) for p in self.good_proxies]))
-        with open(bad_filename, 'w') as export_file:
-            export_file.write('\n'.join([str(p) for p in self.bad_proxies]))
-        with open(banned_filename, 'w') as export_file:
-            export_file.write('\n'.join([str(p) for p in self.banned_proxies]))
+    def export_proxy_manager(self):
+        with open(self. good_filename, 'w') as export_file:
+            export_file.write('\n'.join([p.json_string() for p in self.good_proxies]))
+        with open(self .bad_filename, 'w') as export_file:
+            export_file.write('\n'.join([p.json_string() for p in self.bad_proxies]))
+        with open(self. banned_filename, 'w') as export_file:
+            export_file.write('\n'.join([p.json_string() for p in self.banned_proxies]))
         return
 
     def __repr__(self):
-        return str(self.proxies)
+        return str(self.good_proxies)
 
     def get_random_good_proxy(self):
         return random.choice(self.good_proxies)
 
     def fail_proxy(self, proxy):
-        self.good_proxies.remove(proxy)
-        self.bad_proxies.append(proxy)
+        proxy.fail()
+        LOGGER.info("[Proxy Manager] Proxy %s failed %d consecutive times",
+                    str(proxy), proxy.consecutive_fails)
+        (_, consecutive_fails) = proxy.stats()
+        if consecutive_fails > self.CONSECUTIVE_FAIL_LIMIT:
+            LOGGER.info("[Proxy Manager] Proxy %s fails too much", str(proxy))
+            self.remove_bad_proxy(proxy)
+        self.export_proxy_manager()
         return
 
     def ban_proxy(self, proxy):
+        LOGGER.info("[Proxy Manager] banning proxy %s", str(proxy))
         proxy.ban()
         self.good_proxies.remove(proxy)
         self.banned_proxies.append(proxy)
+        self.export_proxy_manager()
         return
 
     def unban_proxy(self, proxy):
+        LOGGER.info("[Proxy Manager] unbanning proxy %s", str(proxy))
         proxy.unban()
         self.good_proxies.append(proxy)
         self.banned_proxies.remove(proxy)
+        self.export_proxy_manager()
         return
 
-    def add_proxy(self, proxy):
-        # for now assume we only want to add good proxy
-        self.good_proxies.append(proxy)
+    def remove_bad_proxy(self, proxy):
+        LOGGER.info("[Proxy Manager] Removing proxy %s", str(proxy))
+        self.good_proxies.remove(proxy)
+        self.bad_proxies.append(proxy)
         return
 
 class Proxy():
@@ -89,7 +109,8 @@ class Proxy():
         proxy = cls()
         proxy.__dict__.update(dictionary)
         # transform datetime strings back to datetimes
-        proxy.bans = [datetime.datetime.strptime(ban, "%Y-%m-%d %H:%M:%S.%f") if ban else None for ban in proxy.bans]
+        proxy.bans = [datetime.datetime.strptime(ban, "%Y-%m-%d %H:%M:%S.%f")
+                      if ban else None for ban in proxy.bans]
         return proxy
 
     def __eq__(self, other):
@@ -98,6 +119,9 @@ class Proxy():
         return False
 
     def __str__(self):
+        return self.get_url()
+
+    def json_string(self):
         return json.dumps(self.__dict__, default=str)
 
     def get_url(self):
@@ -126,11 +150,11 @@ class Proxy():
 
     def stats(self):
         total = self.successes+self.fails
-        if total>0:
+        if total > 0:
             success_ratio = self.successes/(self.successes+self.fails)
         else:
             success_ratio = 1
-        return success_ratio,self.consecutive_fails
+        return success_ratio, self.consecutive_fails
 
     def last_ban_hours(self):
         if self.is_banned():
@@ -138,6 +162,7 @@ class Proxy():
             return ban_hours
 
     def test(self):
+        LOGGER.info("[Proxy] testing proxy %s", str(self))
         proxy_url = self.get_url()
         try:
             response = requests.get("http://httpbin.org/ip",
@@ -155,7 +180,7 @@ class Proxy():
         except requests.exceptions.ReadTimeout:
             print("Server timeout")
             return False
-        ip_check = response.json()['origin'].split(',')[0] == self.host
+        ip_check = response_json['origin'].split(',')[0] == self.host
         if ip_check:
             self.succeed()
         else:
@@ -165,7 +190,7 @@ class Proxy():
 if __name__ == "__main__":
     # proxies = ["108.61.186.207:8080","118.27.31.50:3128","5.196.132.117:3128"]
     # proxymanager = ProxyManager(proxies)
-    proxymanager = ProxyManager.from_csv("proxies")
+    proxymanager = ProxyManager.from_csv('proxies', 'good_test', 'bad_test', 'banned_test')
 
     random_proxy = proxymanager.get_random_good_proxy()
 
@@ -187,7 +212,7 @@ if __name__ == "__main__":
     random_proxy.fail()
     print(random_proxy.stats())
 
-    proxymanager.export_proxy_manager('good_test', 'bad_test', 'banned_test')
+    proxymanager.export_proxy_manager()
 
     pm2 = ProxyManager.import_proxy_manager('good_test', 'bad_test', 'banned_test')
     print(pm2.good_proxies)
