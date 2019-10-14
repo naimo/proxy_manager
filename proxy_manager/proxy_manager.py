@@ -1,14 +1,15 @@
 """This module helps cycling proxies for web scraping applications"""
 
+import logging
+LOGGER = logging.getLogger("proxy_manager")
+LOGGER.setLevel(logging.INFO)
+LOGGER.addHandler(logging.StreamHandler())
+
 import json
 import datetime
 import random
-import logging
 import requests
 
-LOGGER = logging.getLogger("proxy_manager")
-LOGGER.setLevel('INFO')
-LOGGER.addHandler(logging.StreamHandler())
 
 class ProxyManager():
     CONSECUTIVE_FAIL_LIMIT = 5
@@ -62,35 +63,49 @@ class ProxyManager():
 
     def fail_proxy(self, proxy):
         proxy.fail()
-        LOGGER.info("[Proxy Manager] Proxy %s failed %d consecutive times",
+        LOGGER.info("[Proxy Manager] %s failed %d consecutive times",
                     str(proxy), proxy.consecutive_fails)
         (_, consecutive_fails) = proxy.stats()
         if consecutive_fails > self.CONSECUTIVE_FAIL_LIMIT:
-            LOGGER.info("[Proxy Manager] Proxy %s fails too much", str(proxy))
+            LOGGER.info("[Proxy Manager] %s fails too much", str(proxy))
             self.remove_bad_proxy(proxy)
         self.export_proxy_manager()
         return
 
     def ban_proxy(self, proxy):
-        LOGGER.info("[Proxy Manager] banning proxy %s", str(proxy))
+        LOGGER.info("[Proxy Manager] banning %s", str(proxy))
         proxy.ban()
-        self.good_proxies.remove(proxy)
-        self.banned_proxies.append(proxy)
-        self.export_proxy_manager()
+        if proxy in self.good_proxies:
+            self.good_proxies.remove(proxy)
+            self.banned_proxies.append(proxy)
+            self.export_proxy_manager()
+        else:
+            LOGGER.info("[Proxy Manager] %s already banned", str(proxy))
         return
 
     def unban_proxy(self, proxy):
-        LOGGER.info("[Proxy Manager] unbanning proxy %s", str(proxy))
+        LOGGER.info("[Proxy Manager] unbanning %s", str(proxy))
         proxy.unban()
-        self.good_proxies.append(proxy)
-        self.banned_proxies.remove(proxy)
-        self.export_proxy_manager()
+        if proxy in self.banned_proxies:
+            self.banned_proxies.remove(proxy)
+            self.good_proxies.append(proxy)
+            self.export_proxy_manager()
+        else:
+            LOGGER.info("[Proxy Manager] %s already unbanned", str(proxy))
+        return
+
+    def succeed_proxy(self, proxy):
+        proxy.succeed()
         return
 
     def remove_bad_proxy(self, proxy):
-        LOGGER.info("[Proxy Manager] Removing proxy %s", str(proxy))
-        self.good_proxies.remove(proxy)
-        self.bad_proxies.append(proxy)
+        LOGGER.info("[Proxy Manager] Removing %s", str(proxy))
+        if proxy in self.good_proxies:
+            self.good_proxies.remove(proxy)
+            self.bad_proxies.append(proxy)
+            self.export_proxy_manager()        
+        else:
+            LOGGER.info("[Proxy Manager] %s already removed", str(proxy))
         return
 
 class Proxy():
@@ -197,22 +212,25 @@ if __name__ == "__main__":
     print(random_proxy, random_proxy.test())
     print(random_proxy.is_banned())
     proxymanager.ban_proxy(random_proxy)
+    proxymanager.ban_proxy(random_proxy)
     print(random_proxy.is_banned(), random_proxy.last_ban_hours())
-    random_proxy.unban()
+    proxymanager.unban_proxy(random_proxy)
+    proxymanager.unban_proxy(random_proxy)
     print(random_proxy.is_banned(), random_proxy.bans)
 
     print(random_proxy.stats())
-    random_proxy.succeed()
+    proxymanager.succeed_proxy(random_proxy)
     print(random_proxy.stats())
-    random_proxy.fail()
-    random_proxy.fail()
+    proxymanager.fail_proxy(random_proxy)
+    proxymanager.fail_proxy(random_proxy)
+    proxymanager.fail_proxy(random_proxy)
+    proxymanager.fail_proxy(random_proxy)
+    proxymanager.fail_proxy(random_proxy)
+    proxymanager.fail_proxy(random_proxy)
     print(random_proxy.stats())
-    random_proxy.succeed()
+    proxymanager.succeed_proxy(random_proxy)
     print(random_proxy.stats())
-    random_proxy.fail()
+    proxymanager.fail_proxy(random_proxy)
     print(random_proxy.stats())
 
     proxymanager.export_proxy_manager()
-
-    pm2 = ProxyManager.import_proxy_manager('good_test', 'bad_test', 'banned_test')
-    print(pm2.good_proxies)
