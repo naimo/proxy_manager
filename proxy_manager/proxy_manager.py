@@ -2,7 +2,7 @@
 
 import logging
 LOGGER = logging.getLogger("proxy_manager")
-LOGGER.setLevel(logging.INFO)
+LOGGER.setLevel(logging.DEBUG)
 LOGGER.addHandler(logging.StreamHandler())
 
 import json
@@ -72,7 +72,6 @@ class ProxyManager():
         if consecutive_fails > self.CONSECUTIVE_FAIL_LIMIT:
             LOGGER.info("[Proxy Manager] %s fails too much", str(proxy))
             self.remove_bad_proxy(proxy)
-        self.export_proxy_manager()
         return
 
     def ban_proxy(self, proxy):
@@ -81,7 +80,6 @@ class ProxyManager():
         if proxy in self.good_proxies:
             self.good_proxies.remove(proxy)
             self.banned_proxies.append(proxy)
-            self.export_proxy_manager()
         else:
             LOGGER.info("[Proxy Manager] %s already banned", str(proxy))
         return
@@ -92,7 +90,6 @@ class ProxyManager():
         if proxy in self.banned_proxies:
             self.banned_proxies.remove(proxy)
             self.good_proxies.append(proxy)
-            self.export_proxy_manager()
         else:
             LOGGER.info("[Proxy Manager] %s already unbanned", str(proxy))
         return
@@ -106,15 +103,18 @@ class ProxyManager():
         if proxy in self.good_proxies:
             self.good_proxies.remove(proxy)
             self.bad_proxies.append(proxy)
-            self.export_proxy_manager()
         else:
             LOGGER.info("[Proxy Manager] %s already removed", str(proxy))
         return
 
     def unban_oldest(self, hour_delta):
+        unban_list = []
         for proxy in self.banned_proxies:
             if (datetime.datetime.now() - proxy.bans[-1]) > datetime.timedelta(hours=hour_delta):
-                self.unban_proxy(proxy)
+                unban_list.append(proxy)
+        # have to separate to avoid modifying list within loop
+        for proxy in unban_list:
+            self.unban_proxy(proxy)
         return
 
 class Proxy():
