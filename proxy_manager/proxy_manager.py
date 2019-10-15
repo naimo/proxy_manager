@@ -58,6 +58,9 @@ class ProxyManager():
     def __repr__(self):
         return str(self.good_proxies)
 
+    def good_proxy_count(self):
+        return len(self.good_proxies)
+
     def get_random_good_proxy(self):
         return random.choice(self.good_proxies)
 
@@ -103,9 +106,15 @@ class ProxyManager():
         if proxy in self.good_proxies:
             self.good_proxies.remove(proxy)
             self.bad_proxies.append(proxy)
-            self.export_proxy_manager()        
+            self.export_proxy_manager()
         else:
             LOGGER.info("[Proxy Manager] %s already removed", str(proxy))
+        return
+
+    def unban_oldest(self, hour_delta):
+        for proxy in self.banned_proxies:
+            if (datetime.datetime.now() - proxy.bans[-1]) > datetime.timedelta(hours=hour_delta):
+                self.unban_proxy(proxy)
         return
 
 class Proxy():
@@ -143,11 +152,17 @@ class Proxy():
         return self.host+":"+str(self.port)
 
     def ban(self):
-        self.bans[-1] = datetime.datetime.now()
+        if not self.is_banned():
+            self.bans[-1] = datetime.datetime.now()
+        else:
+            LOGGER.info("[Proxy] already banned")
         return
 
     def unban(self):
-        self.bans.append(None)
+        if self.is_banned():
+            self.bans.append(None)
+        else:
+            LOGGER.info("[Proxy] already unbanned")
         return
 
     def is_banned(self):
