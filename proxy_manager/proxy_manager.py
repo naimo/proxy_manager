@@ -17,7 +17,7 @@ class ProxyManager():
     """Holds a list of proxies and handling tools"""
     def __init__(self, good_proxy_list, good_filename, bad_filename, banned_filename):
         # for now assume we just instanciate with good proxies
-        self.good_proxies = [Proxy(h, p) for (h, p) in [p.split(':') for p in good_proxy_list]]
+        self.good_proxies = good_proxy_list
         self.bad_proxies = []
         self.banned_proxies = []
         self.good_filename = good_filename
@@ -25,12 +25,25 @@ class ProxyManager():
         self.banned_filename = banned_filename
 
     @classmethod
-    def from_csv(cls, filename, good_filename, bad_filename, banned_filename):
+    def create_from_csv(cls, filename, good_filename, bad_filename, banned_filename):
         # for now assume we just import good proxies from CSV
+        proxies = cls.proxies_from_csv(filename)
+        return cls(proxies, good_filename, bad_filename, banned_filename)
+
+    @classmethod
+    def proxies_from_csv(cls, filename):
         with open(filename) as proxy_file:
             content = proxy_file.readlines()
-        content = [x.strip() for x in content]
-        return cls(content, good_filename, bad_filename, banned_filename)
+        hosts_ports = [x.strip().split(':') for x in content]
+        proxies = [Proxy(h,p) for (h,p) in hosts_ports]
+        return proxies
+
+    def import_csv(self, filename):
+        new_proxies = self.proxies_from_csv(filename)
+        for p in new_proxies:
+            if p not in (self.good_proxies + self.bad_proxies + self.banned_proxies) :
+                self.good_proxies.append(p)
+                LOGGER.info("[Proxy Manager] adding %s", str(p))
 
     @classmethod
     def import_proxy_manager(cls, good_filename, bad_filename, banned_filename):
