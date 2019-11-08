@@ -25,17 +25,29 @@ class ProxyManager():
         return cls(proxies, export_files, fail_limit)
 
     @classmethod
+    def proxies_from_lines(cls, proxies_string):
+        hosts_ports = [x.strip().split(':') for x in proxies_string]
+        proxies = [Proxy(h, p) for (h, p) in hosts_ports]
+        return proxies
+
+    @classmethod
     def proxies_from_csv(cls, filename):
         with open(filename) as proxy_file:
             content = proxy_file.readlines()
-        hosts_ports = [x.strip().split(':') for x in content]
-        proxies = [Proxy(h,p) for (h,p) in hosts_ports]
-        return proxies
+        proxies = cls.proxies_from_lines(content)
+        return proxies        
+
+    def import_string(self, proxies_string):
+        new_proxies = self.proxies_from_lines(proxies_string.splitlines())
+        self.import_proxy_list(new_proxies)
 
     def import_csv(self, filename):
         new_proxies = self.proxies_from_csv(filename)
-        for p in new_proxies:
-            if p not in (self.good_proxies + self.bad_proxies + self.banned_proxies) :
+        self.import_proxy_list(new_proxies)
+
+    def import_proxy_list(self, proxy_list):
+        for p in proxy_list:
+            if p not in (self.good_proxies + self.bad_proxies + self.banned_proxies):
                 self.good_proxies.append(p)
                 LOGGER.info("[Proxy Manager] adding %s", str(p))
 
@@ -69,7 +81,12 @@ class ProxyManager():
         return len(self.good_proxies)
 
     def get_random_good_proxy(self):
-        return random.choice(self.good_proxies)
+        try:
+            good_proxy = random.choice(self.good_proxies)
+        except IndexError:
+            LOGGER.error("[Proxy Manager] No more good proxies")
+            raise
+        return good_proxy
 
     def fail_proxy(self, proxy):
         proxy.fail()
@@ -128,8 +145,8 @@ class ProxyManager():
 if __name__ == "__main__":
     # proxies = ["108.61.186.207:8080","118.27.31.50:3128","5.196.132.117:3128"]
     # proxymanager = ProxyManager(proxies)
-    proxymanager = ProxyManager.from_csv('proxies',
-                                         export_files = {
+    proxymanager = ProxyManager.create_from_csv('proxies',
+                                         export_files={
                                              'good_proxies':'good_test',
                                              'bad_proxies':'bad_test',
                                              'banned_proxies':'banned_test'
