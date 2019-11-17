@@ -3,6 +3,7 @@ import datetime
 import random
 
 from proxy_manager.proxy import Proxy
+from proxy_manager.sources import ClarketmSource
 
 LOGGER = logging.getLogger("proxy_manager")
 LOGGER.setLevel(logging.INFO)
@@ -10,13 +11,14 @@ LOGGER.addHandler(logging.StreamHandler())
 
 class ProxyManager():
     """Holds a list of proxies and handling tools"""
-    def __init__(self, good_proxy_list, export_files, fail_limit=3):
+    def __init__(self, good_proxy_list, export_files, fail_limit=3, sources=[ClarketmSource]):
         # for now assume we just instanciate with good proxies
         self.good_proxies = good_proxy_list
         self.bad_proxies = []
         self.banned_proxies = []
         self.export_files = export_files
         self.consecutive_fail_limit = fail_limit
+        self.sources = sources
 
     @classmethod
     def create_from_csv(cls, filename, export_files, fail_limit=3):
@@ -141,6 +143,10 @@ class ProxyManager():
             self.unban_proxy(proxy)
         return
 
+    def fetch_sources(self):
+        for source in self.sources:
+            proxy_string = source.fetch()
+            self.import_string(proxy_string)
 
 if __name__ == "__main__":
     # proxies = ["108.61.186.207:8080","118.27.31.50:3128","5.196.132.117:3128"]
@@ -151,6 +157,10 @@ if __name__ == "__main__":
                                              'bad_proxies':'bad_test',
                                              'banned_proxies':'banned_test'
                                          })
+
+    proxymanager.get_random_good_proxy()
+
+    proxymanager.import_csv('proxies')
 
     random_proxy = proxymanager.get_random_good_proxy()
 
@@ -177,5 +187,7 @@ if __name__ == "__main__":
     print(random_proxy.stats())
     proxymanager.fail_proxy(random_proxy)
     print(random_proxy.stats())
+
+    proxymanager.fetch_sources()
 
     proxymanager.export_proxy_manager()
