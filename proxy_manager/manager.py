@@ -3,7 +3,7 @@ import datetime
 import random
 
 from proxy_manager.proxy import Proxy
-from proxy_manager.sources import ClarketmSource
+from proxy_manager.sources import ClarketmSource, A2uSource
 
 LOGGER = logging.getLogger("proxy_manager")
 LOGGER.setLevel(logging.INFO)
@@ -11,7 +11,7 @@ LOGGER.addHandler(logging.StreamHandler())
 
 class ProxyManager():
     """Holds a list of proxies and handling tools"""
-    def __init__(self, good_proxy_list, export_files, fail_limit=3, sources=[ClarketmSource]):
+    def __init__(self, good_proxy_list, export_files, fail_limit=3, sources=[ClarketmSource,A2uSource]):
         # for now assume we just instanciate with good proxies
         self.good_proxies = good_proxy_list
         self.bad_proxies = []
@@ -52,6 +52,8 @@ class ProxyManager():
             if p not in (self.good_proxies + self.bad_proxies + self.banned_proxies):
                 self.good_proxies.append(p)
                 LOGGER.info("[Proxy Manager] adding %s", str(p))
+            else:
+                LOGGER.info("[Proxy Manager] already had %s", str(p))
 
     @classmethod
     def import_proxy_manager(cls, export_files, fail_limit=3):
@@ -151,16 +153,12 @@ class ProxyManager():
 if __name__ == "__main__":
     # proxies = ["108.61.186.207:8080","118.27.31.50:3128","5.196.132.117:3128"]
     # proxymanager = ProxyManager(proxies)
-    proxymanager = ProxyManager.create_from_csv('proxies',
+    proxymanager = ProxyManager.import_proxy_manager(
                                          export_files={
                                              'good_proxies':'good_test',
                                              'bad_proxies':'bad_test',
                                              'banned_proxies':'banned_test'
                                          })
-
-    proxymanager.get_random_good_proxy()
-
-    proxymanager.import_csv('proxies')
 
     random_proxy = proxymanager.get_random_good_proxy()
 
