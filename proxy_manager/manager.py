@@ -1,17 +1,20 @@
 import logging
 import datetime
 import random
+import re
 
 from proxy_manager.proxy import Proxy
-from proxy_manager.sources import ClarketmSource, A2uSource
+from proxy_manager.sources import ClarketmSource, A2uSource, TheSpeedXSource
 
 LOGGER = logging.getLogger("proxy_manager")
 LOGGER.setLevel(logging.INFO)
 LOGGER.addHandler(logging.StreamHandler())
 
+IP_PORT_PATTERN = re.compile("((?:[0-9]{1,3}\.){3}[0-9]{1,3}):([0-9]+)")
+
 class ProxyManager():
     """Holds a list of proxies and handling tools"""
-    def __init__(self, good_proxy_list, export_files, fail_limit=3, sources=[ClarketmSource,A2uSource]):
+    def __init__(self, good_proxy_list, export_files, fail_limit=3, sources=[ClarketmSource, A2uSource, TheSpeedXSource]):
         # for now assume we just instanciate with good proxies
         self.good_proxies = good_proxy_list
         self.bad_proxies = []
@@ -27,8 +30,12 @@ class ProxyManager():
         return cls(proxies, export_files, fail_limit)
 
     @classmethod
-    def proxies_from_lines(cls, proxies_string):
-        hosts_ports = [x.strip().split(':') for x in proxies_string]
+    def proxies_from_lines(cls, proxy_lines):
+        hosts_ports = []
+        for line in proxy_lines:
+            m = IP_PORT_PATTERN.search(line)
+            if m is not None:
+                hosts_ports.append(m.groups())
         proxies = [Proxy(h, p) for (h, p) in hosts_ports]
         return proxies
 

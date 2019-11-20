@@ -12,5 +12,8 @@ class ClarketmSource(ProxySource):
 class A2uSource(ProxySource):
     URL = "https://raw.githubusercontent.com/a2u/free-proxy-list/master/free-proxy-list.txt"
 
+class TheSpeedXSource(ProxySource):
+    URL = "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt"
+
 if __name__ == "__main__":
-    print(A2uSource.fetch())
+    print(TheSpeedXSource.fetch())
