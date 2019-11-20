@@ -81,7 +81,7 @@ class Proxy():
         else:
             return None
 
-    def test(self):
+    def test(self, require_anonymity=False):
         LOGGER.info("[Proxy] testing proxy %s", str(self))
         proxy_url = self.get_url()
         try:
@@ -103,9 +103,14 @@ class Proxy():
         except requests.exceptions.TooManyRedirects:
             LOGGER.info("[Proxy] Too many redirects")
             return False
-        ip_check = response_json['origin'].split(',')[0] == self.host
-        if ip_check:
-            self.succeed()
-        else:
-            self.fail()
-        return ip_check
+        success = False
+        if "origin" in response_json:
+            success = True
+            LOGGER.info("[Proxy] Connection success")          
+            if require_anonymity:
+                if response_json['origin'].split(',')[0] == self.host:
+                    LOGGER.info("[Proxy] Anonymity success")
+                else:
+                    success = False
+                    LOGGER.info("[Proxy] Anonymity fail")
+        return success
