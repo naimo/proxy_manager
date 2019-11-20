@@ -78,6 +78,8 @@ class Proxy():
         if self.is_banned():
             ban_hours = (datetime.datetime.now() - self.bans[-1]).seconds/3600
             return ban_hours
+        else:
+            return None
 
     def test(self):
         LOGGER.info("[Proxy] testing proxy %s", str(self))
@@ -87,16 +89,19 @@ class Proxy():
                                     proxies={"http":proxy_url, "https":proxy_url}, timeout=5)
             response_json = response.json()
         except json.decoder.JSONDecodeError:
-            print("Json error %s" % response.text)
+            LOGGER.info("[Proxy] Json error %s" % response.text)
             return False
         except requests.exceptions.ConnectTimeout:
-            print("Request timeout error")
+            LOGGER.info("[Proxy] Request timeout error")
             return False
         except requests.exceptions.ProxyError as error:
-            print("Proxy error : {0}".format(error.strerror))
+            LOGGER.info("[Proxy] Proxy error %s", str(error))
             return False
         except requests.exceptions.ReadTimeout:
-            print("Server timeout")
+            LOGGER.info("[Proxy] Server timeout")
+            return False
+        except requests.exceptions.TooManyRedirects:
+            LOGGER.info("[Proxy] Too many redirects")
             return False
         ip_check = response_json['origin'].split(',')[0] == self.host
         if ip_check:

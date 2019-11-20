@@ -24,12 +24,6 @@ class ProxyManager():
         self.sources = sources
 
     @classmethod
-    def create_from_csv(cls, filename, export_files, fail_limit=3):
-        # for now assume we just import good proxies from CSV
-        proxies = cls.proxies_from_csv(filename)
-        return cls(proxies, export_files, fail_limit)
-
-    @classmethod
     def proxies_from_lines(cls, proxy_lines):
         hosts_ports = []
         for line in proxy_lines:
@@ -46,21 +40,37 @@ class ProxyManager():
         proxies = cls.proxies_from_lines(content)
         return proxies        
 
-    def import_string(self, proxies_string):
-        new_proxies = self.proxies_from_lines(proxies_string.splitlines())
-        self.import_proxy_list(new_proxies)
-
-    def import_csv(self, filename):
-        new_proxies = self.proxies_from_csv(filename)
-        self.import_proxy_list(new_proxies)
-
-    def import_proxy_list(self, proxy_list):
+    def import_proxy_list(self, proxy_list, limit):
+        count = 0
         for p in proxy_list:
             if p not in (self.good_proxies + self.bad_proxies + self.banned_proxies):
-                self.good_proxies.append(p)
-                LOGGER.info("[Proxy Manager] adding %s", str(p))
+                if p.test():
+                    self.good_proxies.append(p)
+                    count +=1
+                    LOGGER.info("[Proxy Manager] adding good proxy %s, %d/%d", str(p), count, limit)
+                    if count == limit:
+                        LOGGER.info("[Proxy Manager] enough proxies added")
+                        return
+                else:
+                    self.bad_proxies.append(p)
+                    LOGGER.info("[Proxy Manager] adding bad proxy %s", str(p))
             else:
-                LOGGER.info("[Proxy Manager] already had %s", str(p))
+                LOGGER.info("[Proxy Manager] already knew %s", str(p))
+
+    def import_string(self, proxies_string, limit=None):
+        new_proxies = self.proxies_from_lines(proxies_string.splitlines())
+        self.import_proxy_list(new_proxies, limit)
+
+    def import_csv(self, filename, limit=None):
+        new_proxies = self.proxies_from_csv(filename)
+        self.import_proxy_list(new_proxies, limit)
+
+    def fetch_sources(self, limit=None):
+        proxies = []
+        for source in self.sources:
+            proxy_lines = source.fetch().splitlines()
+            proxies += (self.proxies_from_lines(proxy_lines))
+        self.import_proxy_list(proxies, limit)
 
     @classmethod
     def import_proxy_manager(cls, export_files, fail_limit=3):
@@ -96,8 +106,16 @@ class ProxyManager():
             good_proxy = random.choice(self.good_proxies)
         except IndexError:
             LOGGER.error("[Proxy Manager] No more good proxies")
-            raise
+            return None
         return good_proxy
+
+    def get_random_bad_proxy(self):
+        try:
+            bad_proxy = random.choice(self.bad_proxies)
+        except IndexError:
+            LOGGER.error("[Proxy Manager] No bad proxy in manager")
+            return None
+        return bad_proxy
 
     def fail_proxy(self, proxy):
         proxy.fail()
@@ -152,11 +170,6 @@ class ProxyManager():
             self.unban_proxy(proxy)
         return
 
-    def fetch_sources(self):
-        for source in self.sources:
-            proxy_string = source.fetch()
-            self.import_string(proxy_string)
-
 if __name__ == "__main__":
     # proxies = ["108.61.186.207:8080","118.27.31.50:3128","5.196.132.117:3128"]
     # proxymanager = ProxyManager(proxies)
@@ -167,32 +180,18 @@ if __name__ == "__main__":
                                              'banned_proxies':'banned_test'
                                          })
 
-    random_proxy = proxymanager.get_random_good_proxy()
+    random_good_proxy = proxymanager.get_random_good_proxy()
+    if random_good_proxy is not None:
+        print(random_good_proxy, random_good_proxy.test())
+    else:
+        print("No more good proxy")
 
-    print(random_proxy, random_proxy.test())
-    print(random_proxy.is_banned())
-    proxymanager.ban_proxy(random_proxy)
-    proxymanager.ban_proxy(random_proxy)
-    print(random_proxy.is_banned(), random_proxy.last_ban_hours())
-    proxymanager.unban_proxy(random_proxy)
-    proxymanager.unban_proxy(random_proxy)
-    print(random_proxy.is_banned(), random_proxy.bans)
+    random_bad_proxy = proxymanager.get_random_bad_proxy()
+    if random_bad_proxy is not None:
+        print(random_bad_proxy, random_bad_proxy.test())
+    else:
+        print("No more bad proxy")
 
-    print(random_proxy.stats())
-    proxymanager.succeed_proxy(random_proxy)
-    print(random_proxy.stats())
-    proxymanager.fail_proxy(random_proxy)
-    proxymanager.fail_proxy(random_proxy)
-    proxymanager.fail_proxy(random_proxy)
-    proxymanager.fail_proxy(random_proxy)
-    proxymanager.fail_proxy(random_proxy)
-    proxymanager.fail_proxy(random_proxy)
-    print(random_proxy.stats())
-    proxymanager.succeed_proxy(random_proxy)
-    print(random_proxy.stats())
-    proxymanager.fail_proxy(random_proxy)
-    print(random_proxy.stats())
-
-    proxymanager.fetch_sources()
+    proxymanager.fetch_sources(limit = 10)
 
     proxymanager.export_proxy_manager()
