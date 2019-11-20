@@ -4,7 +4,7 @@ class ProxySource():
     @classmethod
     def fetch(cls):
         r = requests.get(cls.URL)
-        return r.text.strip()
+        return r.text.strip().splitlines()
 
 class ClarketmSource(ProxySource):
     URL = "https://raw.githubusercontent.com/clarketm/proxy-list/master/proxy-list-raw.txt"

@@ -24,55 +24,6 @@ class ProxyManager():
         self.sources = sources
 
     @classmethod
-    def proxies_from_lines(cls, proxy_lines):
-        hosts_ports = []
-        for line in proxy_lines:
-            m = IP_PORT_PATTERN.search(line)
-            if m is not None:
-                hosts_ports.append(m.groups())
-        proxies = [Proxy(h, p) for (h, p) in hosts_ports]
-        return proxies
-
-    @classmethod
-    def proxies_from_csv(cls, filename):
-        with open(filename) as proxy_file:
-            content = proxy_file.readlines()
-        proxies = cls.proxies_from_lines(content)
-        return proxies        
-
-    def import_proxy_list(self, proxy_list, limit):
-        count = 0
-        for p in proxy_list:
-            if p not in (self.good_proxies + self.bad_proxies + self.banned_proxies):
-                if p.test():
-                    self.good_proxies.append(p)
-                    count +=1
-                    LOGGER.info("[Proxy Manager] adding good proxy %s, %d/%d", str(p), count, limit)
-                    if count == limit:
-                        LOGGER.info("[Proxy Manager] enough proxies added")
-                        return
-                else:
-                    self.bad_proxies.append(p)
-                    LOGGER.info("[Proxy Manager] adding bad proxy %s", str(p))
-            else:
-                LOGGER.info("[Proxy Manager] already knew %s", str(p))
-
-    def import_string(self, proxies_string, limit=None):
-        new_proxies = self.proxies_from_lines(proxies_string.splitlines())
-        self.import_proxy_list(new_proxies, limit)
-
-    def import_csv(self, filename, limit=None):
-        new_proxies = self.proxies_from_csv(filename)
-        self.import_proxy_list(new_proxies, limit)
-
-    def fetch_sources(self, limit=None):
-        proxies = []
-        for source in self.sources:
-            proxy_lines = source.fetch().splitlines()
-            proxies += (self.proxies_from_lines(proxy_lines))
-        self.import_proxy_list(proxies, limit)
-
-    @classmethod
     def import_proxy_manager(cls, export_files, fail_limit=3):
         proxy_manager = cls([], export_files, fail_limit)
         with open(export_files["good_proxies"]) as proxy_import:
@@ -94,6 +45,68 @@ class ProxyManager():
         with open(self.export_files["banned_proxies"], 'w') as export_file:
             export_file.write('\n'.join([p.json_string() for p in self.banned_proxies]))
         return
+
+    def merge_proxy_manager(self, other):
+        for good_proxy in other.good_proxies:
+            if good_proxy not in (self.good_proxies + self.bad_proxies + self.banned_proxies):
+                self.good_proxies.append(good_proxy)
+        for banned_proxy in other.banned_proxies:
+            if banned_proxy not in (self.good_proxies + self.bad_proxies + self.banned_proxies):
+                self.banned_proxies.append(banned_proxy)
+        for bad_proxy in other.bad_proxies:
+            if bad_proxy not in (self.good_proxies + self.bad_proxies + self.banned_proxies):
+                self.bad_proxies.append(bad_proxy)
+
+    @classmethod
+    def proxies_from_line_strings(cls, proxy_lines):
+        hosts_ports = []
+        for line in proxy_lines:
+            m = IP_PORT_PATTERN.search(line)
+            if m is not None:
+                hosts_ports.append(m.groups())
+        proxies = [Proxy(h, p) for (h, p) in hosts_ports]
+        return proxies
+
+    @classmethod
+    def proxies_from_csv(cls, filename):
+        with open(filename) as proxy_file:
+            content = proxy_file.readlines()
+        proxies = cls.proxies_from_line_strings(content)
+        return proxies        
+
+    def import_proxy_list(self, proxy_list, limit, require_anonymity=False):
+        count = 0
+        for p in proxy_list:
+            if p not in (self.good_proxies + self.bad_proxies + self.banned_proxies):
+                if p.test(require_anonymity):
+                    self.good_proxies.append(p)
+                    LOGGER.info("[Proxy Manager] adding good proxy %s", str(p))
+                    if limit is not None:
+                        count +=1
+                        LOGGER.info("[Proxy Manager] %d/%d proxies found", count, limit)
+                        if count == limit:
+                            LOGGER.info("[Proxy Manager] enough proxies added")
+                            return
+                else:
+                    self.bad_proxies.append(p)
+                    LOGGER.info("[Proxy Manager] adding bad proxy %s", str(p))
+            else:
+                LOGGER.info("[Proxy Manager] already knew %s", str(p))
+
+    def import_string(self, proxies_string, limit=None, require_anonymity=False):
+        new_proxies = self.proxies_from_line_strings(proxies_string.splitlines())
+        self.import_proxy_list(new_proxies, limit, require_anonymity)
+
+    def import_csv(self, filename, limit=None, require_anonymity=False):
+        new_proxies = self.proxies_from_csv(filename)
+        self.import_proxy_list(new_proxies, limit, require_anonymity)
+
+    def fetch_sources(self, limit=None, require_anonymity=False):
+        proxies = []
+        for source in self.sources:
+            proxy_lines = source.fetch()
+            proxies += (self.proxies_from_line_strings(proxy_lines))
+        self.import_proxy_list(proxies, limit, require_anonymity)
 
     def __repr__(self):
         return str(self.good_proxies)
@@ -123,7 +136,7 @@ class ProxyManager():
                     str(proxy), proxy.consecutive_fails)
         (_, consecutive_fails) = proxy.stats()
         if consecutive_fails > self.consecutive_fail_limit:
-            LOGGER.info("[Proxy Manager] %s fails too much", str(proxy))
+            LOGGER.info("[Proxy Manager] %s fails too much, %d left", str(proxy), self.good_proxy_count())
             self.remove_bad_proxy(proxy)
         return
 
@@ -192,6 +205,6 @@ if __name__ == "__main__":
     else:
         print("No more bad proxy")
 
-    proxymanager.fetch_sources(limit = 10)
+    proxymanager.fetch_sources(require_anonymity = False)
 
     proxymanager.export_proxy_manager()

@@ -19,8 +19,12 @@ class Proxy():
     def import_proxy(cls, line):
         dictionary = json.loads(line)
         proxy = cls()
-        proxy.__dict__.update(dictionary)
-        # transform datetime strings back to datetimes
+        proxy.host = dictionary["host"]
+        proxy.port = dictionary["port"]
+        proxy.successes = dictionary["successes"]
+        proxy.fails = dictionary["fails"]
+        proxy.consecutive_fails = dictionary["consecutive_fails"]
+        proxy.bans = dictionary["bans"]
         proxy.bans = [datetime.datetime.strptime(ban, "%Y-%m-%d %H:%M:%S.%f")
                       if ban else None for ban in proxy.bans]
         return proxy
@@ -102,6 +106,9 @@ class Proxy():
             return False
         except requests.exceptions.TooManyRedirects:
             LOGGER.info("[Proxy] Too many redirects")
+            return False
+        except (requests.exceptions.ChunkedEncodingError, requests.exceptions.ConnectionError):
+            LOGGER.info("[Proxy] Proxy connection error")
             return False
         success = False
         if "origin" in response_json:
