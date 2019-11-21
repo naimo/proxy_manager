@@ -75,7 +75,6 @@ class ProxyManager():
             known_proxies = (self.good_proxies | self.bad_proxies | self.banned_proxies)
             for proxy in proxy_set:
                 if proxy not in known_proxies:
-                    LOGGER.info("[Proxy Manager] adding proxy %s for testing", str(proxy))
                     tasks.append(asyncio.ensure_future(self.handle_proxy(proxy, require_anonymity)))
                 # else:
                 #     LOGGER.info("[Proxy Manager] already knew %s", str(proxy))
