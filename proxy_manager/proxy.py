@@ -45,7 +45,7 @@ class Proxy():
         return json.dumps(self.__dict__, default=str)
 
     def get_url(self):
-        return 'http://'+self.host+":"+str(self.port)
+        return self.host+":"+str(self.port)
 
     def ban(self):
         if not self.is_banned():

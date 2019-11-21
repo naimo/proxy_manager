@@ -98,7 +98,7 @@ class ProxyManager():
 
     def get_random_good_proxy(self):
         try:
-            good_proxy = random.choice(self.good_proxies)
+            good_proxy = random.choice(tuple(self.good_proxies))
         except IndexError:
             LOGGER.error("[Proxy Manager] No more good proxies")
             return None
@@ -106,7 +106,7 @@ class ProxyManager():
 
     def get_random_bad_proxy(self):
         try:
-            bad_proxy = random.choice(self.bad_proxies)
+            bad_proxy = random.choice(tuple(self.bad_proxies))
         except IndexError:
             LOGGER.error("[Proxy Manager] No bad proxy in manager")
             return None
@@ -174,6 +174,8 @@ if __name__ == "__main__":
                                              'bad_proxies':'bad_test',
                                              'banned_proxies':'banned_test'
                                          })
+
+    # print(proxymanager.get_random_good_proxy())
 
     proxymanager.fetch_sources(require_anonymity = False)
 
