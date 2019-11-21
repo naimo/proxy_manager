@@ -45,7 +45,7 @@ class Proxy():
         return json.dumps(self.__dict__, default=str)
 
     def get_url(self):
-        return self.host+":"+str(self.port)
+        return 'http://'+self.host+':'+str(self.port)
 
     def ban(self):
         if not self.is_banned():
@@ -110,9 +110,6 @@ class Proxy():
                 return False
             except asyncio.TimeoutError:
                 LOGGER.info("[Proxy] Proxy connection timeout")
-                return False
-            except:
-                LOGGER.info("[Proxy] Proxy testing error")
                 return False
             success = False
             if response_json is not None and "origin" in response_json:
