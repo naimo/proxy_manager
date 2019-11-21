@@ -72,16 +72,21 @@ class ProxyManager():
     def import_proxy_set(self, proxy_set, require_anonymity=False):
         async def main():
             tasks = []
+            known_proxies = (self.good_proxies | self.bad_proxies | self.banned_proxies)
             for proxy in proxy_set:
-                if proxy not in (self.good_proxies | self.bad_proxies | self.banned_proxies):
+                if proxy not in known_proxies:
+                    LOGGER.info("[Proxy Manager] adding proxy %s for testing", str(proxy))
                     tasks.append(asyncio.ensure_future(self.handle_proxy(proxy, require_anonymity)))
-                else:
-                    LOGGER.info("[Proxy Manager] already knew %s", str(proxy))
+                # else:
+                #     LOGGER.info("[Proxy Manager] already knew %s", str(proxy))
 
             await asyncio.gather(*tasks)
 
-        loop = asyncio.get_event_loop()
+        # for now keep asyncio foothold to a minimum
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
         loop.run_until_complete(main())
+        loop.close()
 
     def fetch_sources(self, require_anonymity=False):
         proxies = set()
