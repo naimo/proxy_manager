@@ -104,13 +104,15 @@ class Proxy():
                 aiohttp.client_exceptions.ServerDisconnectedError,
                 aiohttp.client_exceptions.ContentTypeError,
                 aiohttp.client_exceptions.ClientOSError,
-                aiohttp.client_exceptions.TooManyRedirects,
                 aiohttp.client_exceptions.ClientResponseError
                 ):
                 LOGGER.info("[Proxy] Proxy connection error")
                 return False
             except asyncio.TimeoutError:
                 LOGGER.info("[Proxy] Proxy connection timeout")
+                return False
+            except:
+                LOGGER.info("[Proxy] Proxy testing error")
                 return False
             success = False
             if response_json is not None and "origin" in response_json:
