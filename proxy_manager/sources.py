@@ -1,10 +1,18 @@
 import requests
+import re
+
+IP_PORT_PATTERN = re.compile("((?:[0-9]{1,3}\.){3}[0-9]{1,3}):([0-9]+)")
 
 class ProxySource():
     @classmethod
     def fetch(cls):
         r = requests.get(cls.URL)
-        return r.text.strip().splitlines()
+        hosts_ports = []
+        for line in r.text.strip().splitlines():
+            m = IP_PORT_PATTERN.search(line)
+            if m is not None:
+                hosts_ports.append(m.groups())
+        return hosts_ports
 
 class ClarketmSource(ProxySource):
     URL = "https://raw.githubusercontent.com/clarketm/proxy-list/master/proxy-list-raw.txt"

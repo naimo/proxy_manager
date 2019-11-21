@@ -1,3 +1,4 @@
+import asyncio, aiohttp
 import logging
 import json
 import datetime
@@ -29,6 +30,9 @@ class Proxy():
                       if ban else None for ban in proxy.bans]
         return proxy
 
+    def __hash__(self):
+        return self.__str__().__hash__()
+
     def __eq__(self, other):
         if isinstance(other, Proxy):
             return (self.host == other.host) and (self.port == other.port)
@@ -41,7 +45,7 @@ class Proxy():
         return json.dumps(self.__dict__, default=str)
 
     def get_url(self):
-        return self.host+":"+str(self.port)
+        return 'http://'+self.host+":"+str(self.port)
 
     def ban(self):
         if not self.is_banned():
@@ -85,39 +89,39 @@ class Proxy():
         else:
             return None
 
-    def test(self, require_anonymity=False):
+    async def test(self, require_anonymity=False):
         LOGGER.info("[Proxy] testing proxy %s", str(self))
         proxy_url = self.get_url()
-        try:
-            response = requests.get("http://httpbin.org/ip",
-                                    proxies={"http":proxy_url, "https":proxy_url}, timeout=5)
-            response_json = response.json()
-        except json.decoder.JSONDecodeError:
-            LOGGER.info("[Proxy] Json error %s" % response.text)
-            return False
-        except requests.exceptions.ConnectTimeout:
-            LOGGER.info("[Proxy] Request timeout error")
-            return False
-        except requests.exceptions.ProxyError as error:
-            LOGGER.info("[Proxy] Proxy error %s", str(error))
-            return False
-        except requests.exceptions.ReadTimeout:
-            LOGGER.info("[Proxy] Server timeout")
-            return False
-        except requests.exceptions.TooManyRedirects:
-            LOGGER.info("[Proxy] Too many redirects")
-            return False
-        except (requests.exceptions.ChunkedEncodingError, requests.exceptions.ConnectionError):
-            LOGGER.info("[Proxy] Proxy connection error")
-            return False
-        success = False
-        if "origin" in response_json:
-            success = True
-            LOGGER.info("[Proxy] Connection success")          
-            if require_anonymity:
-                if response_json['origin'].split(',')[0] == self.host:
-                    LOGGER.info("[Proxy] Anonymity success")
-                else:
-                    success = False
-                    LOGGER.info("[Proxy] Anonymity fail")
-        return success
+        async with aiohttp.ClientSession() as session:
+            try:
+                async with session.get("http://httpbin.org/ip",
+                                        proxy=proxy_url, timeout=5
+                                        ) as response:
+                    response_json = await response.json()
+            except (
+                json.decoder.JSONDecodeError,
+                aiohttp.client_exceptions.ClientProxyConnectionError,
+                aiohttp.client_exceptions.ServerDisconnectedError,
+                aiohttp.client_exceptions.ContentTypeError,
+                aiohttp.client_exceptions.ClientOSError,
+                aiohttp.client_exceptions.TooManyRedirects,
+                aiohttp.client_exceptions.ClientResponseError
+                ):
+                LOGGER.info("[Proxy] Proxy connection error")
+                return False
+            except asyncio.TimeoutError:
+                LOGGER.info("[Proxy] Proxy connection timeout")
+                return False
+            success = False
+            if response_json is not None and "origin" in response_json:
+                success = True
+                LOGGER.info("[Proxy] Connection success")          
+                if require_anonymity:
+                    if response_json['origin'].split(',')[0] == self.host:
+                        LOGGER.info("[Proxy] Anonymity success")
+                    else:
+                        success = False
+                        LOGGER.info("[Proxy] Anonymity fail")
+            else:
+                LOGGER.info("[Proxy] Malformed json")          
+            return success

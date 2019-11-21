@@ -1,7 +1,7 @@
+import asyncio
 import logging
 import datetime
 import random
-import re
 
 from proxy_manager.proxy import Proxy
 from proxy_manager.sources import ClarketmSource, A2uSource, TheSpeedXSource
@@ -10,31 +10,29 @@ LOGGER = logging.getLogger("proxy_manager")
 LOGGER.setLevel(logging.INFO)
 LOGGER.addHandler(logging.StreamHandler())
 
-IP_PORT_PATTERN = re.compile("((?:[0-9]{1,3}\.){3}[0-9]{1,3}):([0-9]+)")
-
 class ProxyManager():
     """Holds a list of proxies and handling tools"""
     def __init__(self, good_proxy_list, export_files, fail_limit=3, sources=[ClarketmSource, A2uSource, TheSpeedXSource]):
         # for now assume we just instanciate with good proxies
-        self.good_proxies = good_proxy_list
-        self.bad_proxies = []
-        self.banned_proxies = []
+        self.good_proxies = set(good_proxy_list)
+        self.bad_proxies = set()
+        self.banned_proxies = set()
         self.export_files = export_files
         self.consecutive_fail_limit = fail_limit
         self.sources = sources
 
     @classmethod
     def import_proxy_manager(cls, export_files, fail_limit=3):
-        proxy_manager = cls([], export_files, fail_limit)
+        proxy_manager = cls(set(), export_files, fail_limit)
         with open(export_files["good_proxies"]) as proxy_import:
             for line in proxy_import.readlines():
-                proxy_manager.good_proxies.append(Proxy.import_proxy(line))
+                proxy_manager.good_proxies.add(Proxy.import_proxy(line))
         with open(export_files["bad_proxies"]) as proxy_import:
             for line in proxy_import.readlines():
-                proxy_manager.bad_proxies.append(Proxy.import_proxy(line))
+                proxy_manager.bad_proxies.add(Proxy.import_proxy(line))
         with open(export_files["banned_proxies"]) as proxy_import:
             for line in proxy_import.readlines():
-                proxy_manager.banned_proxies.append(Proxy.import_proxy(line))
+                proxy_manager.banned_proxies.add(Proxy.import_proxy(line))
         return proxy_manager
 
     def export_proxy_manager(self):
@@ -49,64 +47,48 @@ class ProxyManager():
     def merge_proxy_manager(self, other):
         for good_proxy in other.good_proxies:
             if good_proxy not in (self.good_proxies + self.bad_proxies + self.banned_proxies):
-                self.good_proxies.append(good_proxy)
+                self.good_proxies.add(good_proxy)
         for banned_proxy in other.banned_proxies:
             if banned_proxy not in (self.good_proxies + self.bad_proxies + self.banned_proxies):
-                self.banned_proxies.append(banned_proxy)
+                self.banned_proxies.add(banned_proxy)
         for bad_proxy in other.bad_proxies:
             if bad_proxy not in (self.good_proxies + self.bad_proxies + self.banned_proxies):
-                self.bad_proxies.append(bad_proxy)
+                self.bad_proxies.add(bad_proxy)
 
     @classmethod
-    def proxies_from_line_strings(cls, proxy_lines):
-        hosts_ports = []
-        for line in proxy_lines:
-            m = IP_PORT_PATTERN.search(line)
-            if m is not None:
-                hosts_ports.append(m.groups())
-        proxies = [Proxy(h, p) for (h, p) in hosts_ports]
+    def proxies_from_hosts_ports(cls, hosts_ports):
+        proxies = {Proxy(h, p) for (h, p) in hosts_ports}
         return proxies
 
-    @classmethod
-    def proxies_from_csv(cls, filename):
-        with open(filename) as proxy_file:
-            content = proxy_file.readlines()
-        proxies = cls.proxies_from_line_strings(content)
-        return proxies        
+    async def handle_proxy(self, proxy, require_anonymity = False):
+        proxy_is_good = await proxy.test(require_anonymity)
+        if proxy_is_good:
+            self.good_proxies.add(proxy)
+            LOGGER.info("[Proxy Manager] adding good proxy %s", str(proxy))
+        else:
+            self.bad_proxies.add(proxy)
+            LOGGER.info("[Proxy Manager] adding bad proxy %s", str(proxy))
 
-    def import_proxy_list(self, proxy_list, limit, require_anonymity=False):
-        count = 0
-        for p in proxy_list:
-            if p not in (self.good_proxies + self.bad_proxies + self.banned_proxies):
-                if p.test(require_anonymity):
-                    self.good_proxies.append(p)
-                    LOGGER.info("[Proxy Manager] adding good proxy %s", str(p))
-                    if limit is not None:
-                        count +=1
-                        LOGGER.info("[Proxy Manager] %d/%d proxies found", count, limit)
-                        if count == limit:
-                            LOGGER.info("[Proxy Manager] enough proxies added")
-                            return
+    def import_proxy_set(self, proxy_set, require_anonymity=False):
+        async def main():
+            tasks = []
+            for proxy in proxy_set:
+                if proxy not in (self.good_proxies | self.bad_proxies | self.banned_proxies):
+                    tasks.append(asyncio.ensure_future(self.handle_proxy(proxy, require_anonymity)))
                 else:
-                    self.bad_proxies.append(p)
-                    LOGGER.info("[Proxy Manager] adding bad proxy %s", str(p))
-            else:
-                LOGGER.info("[Proxy Manager] already knew %s", str(p))
+                    LOGGER.info("[Proxy Manager] already knew %s", str(proxy))
 
-    def import_string(self, proxies_string, limit=None, require_anonymity=False):
-        new_proxies = self.proxies_from_line_strings(proxies_string.splitlines())
-        self.import_proxy_list(new_proxies, limit, require_anonymity)
+            await asyncio.gather(*tasks)
 
-    def import_csv(self, filename, limit=None, require_anonymity=False):
-        new_proxies = self.proxies_from_csv(filename)
-        self.import_proxy_list(new_proxies, limit, require_anonymity)
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(main())
 
-    def fetch_sources(self, limit=None, require_anonymity=False):
-        proxies = []
+    def fetch_sources(self, require_anonymity=False):
+        proxies = set()
         for source in self.sources:
-            proxy_lines = source.fetch()
-            proxies += (self.proxies_from_line_strings(proxy_lines))
-        self.import_proxy_list(proxies, limit, require_anonymity)
+            hosts_ports = source.fetch()
+            proxies.update(self.proxies_from_hosts_ports(hosts_ports))
+        self.import_proxy_set(proxies, require_anonymity)
 
     def __repr__(self):
         return str(self.good_proxies)
@@ -130,6 +112,10 @@ class ProxyManager():
             return None
         return bad_proxy
 
+    def succeed_proxy(self, proxy):
+        proxy.succeed()
+        return
+
     def fail_proxy(self, proxy):
         proxy.fail()
         LOGGER.info("[Proxy Manager] %s failed %d consecutive times",
@@ -145,7 +131,7 @@ class ProxyManager():
         proxy.ban()
         if proxy in self.good_proxies:
             self.good_proxies.remove(proxy)
-            self.banned_proxies.append(proxy)
+            self.banned_proxies.add(proxy)
         else:
             LOGGER.info("[Proxy Manager] %s already banned", str(proxy))
         return
@@ -155,31 +141,27 @@ class ProxyManager():
         proxy.unban()
         if proxy in self.banned_proxies:
             self.banned_proxies.remove(proxy)
-            self.good_proxies.append(proxy)
+            self.good_proxies.add(proxy)
         else:
             LOGGER.info("[Proxy Manager] %s already unbanned", str(proxy))
-        return
-
-    def succeed_proxy(self, proxy):
-        proxy.succeed()
         return
 
     def remove_bad_proxy(self, proxy):
         LOGGER.info("[Proxy Manager] Removing %s", str(proxy))
         if proxy in self.good_proxies:
             self.good_proxies.remove(proxy)
-            self.bad_proxies.append(proxy)
+            self.bad_proxies.add(proxy)
         else:
             LOGGER.info("[Proxy Manager] %s already removed", str(proxy))
         return
 
     def unban_oldest(self, hour_delta):
-        unban_list = []
+        unban_set = set()
         for proxy in self.banned_proxies:
             if (datetime.datetime.now() - proxy.bans[-1]) > datetime.timedelta(hours=hour_delta):
-                unban_list.append(proxy)
+                unban_set.add(proxy)
         # have to separate to avoid modifying list within loop
-        for proxy in unban_list:
+        for proxy in unban_set:
             self.unban_proxy(proxy)
         return
 
@@ -192,18 +174,6 @@ if __name__ == "__main__":
                                              'bad_proxies':'bad_test',
                                              'banned_proxies':'banned_test'
                                          })
-
-    random_good_proxy = proxymanager.get_random_good_proxy()
-    if random_good_proxy is not None:
-        print(random_good_proxy, random_good_proxy.test())
-    else:
-        print("No more good proxy")
-
-    random_bad_proxy = proxymanager.get_random_bad_proxy()
-    if random_bad_proxy is not None:
-        print(random_bad_proxy, random_bad_proxy.test())
-    else:
-        print("No more bad proxy")
 
     proxymanager.fetch_sources(require_anonymity = False)
 
