@@ -4,7 +4,7 @@ import datetime
 import random
 
 from proxy_manager.proxy import Proxy
-from proxy_manager.sources import ClarketmSource, A2uSource, TheSpeedXSource
+from proxy_manager.sources import ClarketmSource, A2uSource, TheSpeedXSource, HttpTunnelGe, ProxyTimeRu
 
 LOGGER = logging.getLogger("proxy_manager")
 LOGGER.setLevel(logging.INFO)
@@ -12,7 +12,7 @@ LOGGER.addHandler(logging.StreamHandler())
 
 class ProxyManager():
     """Holds a list of proxies and handling tools"""
-    def __init__(self, good_proxy_list, export_files, fail_limit=3, sources=[ClarketmSource, A2uSource, TheSpeedXSource]):
+    def __init__(self, good_proxy_list, export_files, fail_limit=3, sources=[ClarketmSource, A2uSource, TheSpeedXSource, HttpTunnelGe, ProxyTimeRu]):
         # for now assume we just instanciate with good proxies
         self.good_proxies = set(good_proxy_list)
         self.bad_proxies = set()
