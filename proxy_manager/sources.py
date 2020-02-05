@@ -29,9 +29,8 @@ class HttpTunnelGe(ProxySource):
 class ProxyTimeRu(ProxySource):
     URL = "http://proxytime.ru/http"
 
+class GatherProxyCom(ProxySource):
+    URL = "http://www.gatherproxy.com"
+
 if __name__ == "__main__":
-    print(len(ClarketmSource.fetch()))
-    print(len(A2uSource.fetch()))
-    print(len(TheSpeedXSource.fetch()))
-    print(len(HttpTunnelGe.fetch()))
-    print(len(ProxyTimeRu.fetch()))
+    print(GatherProxyCom.fetch())

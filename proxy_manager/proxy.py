@@ -104,7 +104,8 @@ class Proxy():
                 aiohttp.client_exceptions.ServerDisconnectedError,
                 aiohttp.client_exceptions.ContentTypeError,
                 aiohttp.client_exceptions.ClientOSError,
-                aiohttp.client_exceptions.ClientResponseError
+                aiohttp.client_exceptions.ClientResponseError,
+                aiohttp.client_exceptions.ClientPayloadError
                 ):
                 LOGGER.info("[Proxy] Proxy connection error")
                 return False

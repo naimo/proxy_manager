@@ -94,6 +94,18 @@ class ProxyManager():
             proxies.update(self.proxies_from_hosts_ports(hosts_ports))
         self.import_proxy_set(proxies, require_anonymity)
 
+    def check_bad_proxies(self, require_anonymity=False):
+        bad_proxies = self.bad_proxies
+        self.bad_proxies = set()
+
+        self.import_proxy_set(bad_proxies, require_anonymity)        
+
+    def check_good_proxies(self, require_anonymity=False):
+        good_proxies = self.good_proxies
+        self.good_proxies = set()
+
+        self.import_proxy_set(good_proxies, require_anonymity)        
+
     def __repr__(self):
         return str(self.good_proxies)
 
@@ -181,6 +193,16 @@ if __name__ == "__main__":
 
     # print(proxymanager.get_random_good_proxy())
 
-    proxymanager.fetch_sources(require_anonymity = False)
+    # proxymanager.fetch_sources(require_anonymity = False)
+    old_len = len(proxymanager.good_proxies)
+    proxymanager.check_bad_proxies(require_anonymity = False)
+    new_len = len(proxymanager.good_proxies)
+    print(old_len, new_len)
+
+    old_len = len(proxymanager.good_proxies)
+    proxymanager.check_good_proxies(require_anonymity = False)
+    new_len = len(proxymanager.good_proxies)
+    print(old_len, new_len)
+
 
     proxymanager.export_proxy_manager()
