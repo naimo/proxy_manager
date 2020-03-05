@@ -1,17 +1,19 @@
-import requests
+import aiohttp
 import re
 
 IP_PORT_PATTERN = re.compile("((?:[0-9]{1,3}\.){3}[0-9]{1,3}):([0-9]+)")
 
 class ProxySource():
     @classmethod
-    def fetch(cls):
-        r = requests.get(cls.URL)
+    async def fetch(cls):
         hosts_ports = set()
-        for line in re.split('(?:<br>)|\n|\r', r.text):
-            m = IP_PORT_PATTERN.search(line)
-            if m is not None:
-                hosts_ports.add(m.groups())
+        async with aiohttp.ClientSession() as session:
+            async with session.get(cls.URL) as r:
+                text = await r.text()
+                for line in re.split('(?:<br>)|\n|\r', text):
+                    m = IP_PORT_PATTERN.search(line)
+                    if m is not None:
+                        hosts_ports.add(m.groups())
         return hosts_ports
 
 class ClarketmSource(ProxySource):

@@ -1,4 +1,5 @@
 import asyncio
+import aiohttp
 import logging
 import datetime
 import random
@@ -60,26 +61,33 @@ class ProxyManager():
         proxies = {Proxy(h, p) for (h, p) in hosts_ports}
         return proxies
 
-    async def handle_proxy(self, proxy, require_anonymity = False):
-        proxy_is_good = await proxy.test(require_anonymity)
+    async def handle_proxy(self, proxy, session, require_anonymity = False):
+        proxy_is_good = await proxy.test(session, require_anonymity)
         if proxy_is_good:
-            self.good_proxies.add(proxy)
-            LOGGER.info("[Proxy Manager] adding good proxy %s", str(proxy))
+            if proxy not in self.good_proxies:
+                self.good_proxies.add(proxy)
+            if proxy in self.bad_proxies:
+                self.bad_proxies.remove(proxy)
+            # LOGGER.info("[Proxy Manager] adding good proxy %s", str(proxy))
         else:
-            self.bad_proxies.add(proxy)
-            LOGGER.info("[Proxy Manager] adding bad proxy %s", str(proxy))
+            if proxy not in self.bad_proxies:
+                self.bad_proxies.add(proxy)
+            if proxy in self.good_proxies:
+                self.good_proxies.remove(proxy)
+            # LOGGER.info("[Proxy Manager] adding bad proxy %s", str(proxy))
 
-    def import_proxy_set(self, proxy_set, require_anonymity=False):
+    def import_proxy_set(self, proxy_set, require_anonymity=False, force_recheck=False):
         async def main():
-            tasks = []
-            known_proxies = (self.good_proxies | self.bad_proxies | self.banned_proxies)
-            for proxy in proxy_set:
-                if proxy not in known_proxies:
-                    tasks.append(asyncio.ensure_future(self.handle_proxy(proxy, require_anonymity)))
-                # else:
-                #     LOGGER.info("[Proxy Manager] already knew %s", str(proxy))
+            async with aiohttp.ClientSession() as session:
+                tasks = []
+                known_proxies = (self.good_proxies | self.bad_proxies | self.banned_proxies)
+                for proxy in proxy_set:
+                    if proxy not in known_proxies or force_recheck:
+                        tasks.append(asyncio.ensure_future(self.handle_proxy(proxy, session, require_anonymity)))
+                    # else:
+                    #     LOGGER.info("[Proxy Manager] already knew %s", str(proxy))
 
-            await asyncio.gather(*tasks)
+                await asyncio.gather(*tasks)
 
         # for now keep asyncio foothold to a minimum
         loop = asyncio.new_event_loop()
@@ -89,22 +97,31 @@ class ProxyManager():
 
     def fetch_sources(self, require_anonymity=False):
         proxies = set()
-        for source in self.sources:
-            hosts_ports = source.fetch()
+
+        async def main(source):
+            LOGGER.info("[proxy_manager] fetching %s" %source.URL)
+            hosts_ports = await source.fetch()
+            LOGGER.info("[proxy_manager] received %d proxies from %s", len(hosts_ports), source.URL)
             proxies.update(self.proxies_from_hosts_ports(hosts_ports))
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(
+            asyncio.gather(
+                *[main(source) for source in self.sources]
+            )
+        )
+        loop.close()
+
         self.import_proxy_set(proxies, require_anonymity)
 
     def check_bad_proxies(self, require_anonymity=False):
-        bad_proxies = self.bad_proxies
-        self.bad_proxies = set()
-
-        self.import_proxy_set(bad_proxies, require_anonymity)        
+        LOGGER.info("[proxy_manager] checking bad proxies")
+        self.import_proxy_set(self.bad_proxies, require_anonymity, force_recheck=True)
 
     def check_good_proxies(self, require_anonymity=False):
-        good_proxies = self.good_proxies
-        self.good_proxies = set()
-
-        self.import_proxy_set(good_proxies, require_anonymity)        
+        LOGGER.info("[proxy_manager] checking good proxies")
+        self.import_proxy_set(self.good_proxies, require_anonymity, force_recheck=True)        
 
     def __repr__(self):
         return str(self.good_proxies)
@@ -138,8 +155,8 @@ class ProxyManager():
                     str(proxy), proxy.consecutive_fails)
         (_, consecutive_fails) = proxy.stats()
         if consecutive_fails > self.consecutive_fail_limit:
-            LOGGER.info("[Proxy Manager] %s fails too much, %d left", str(proxy), self.good_proxy_count())
             self.remove_bad_proxy(proxy)
+            LOGGER.info("[Proxy Manager] %s fails too much, %d left", str(proxy), self.good_proxy_count())
         return
 
     def ban_proxy(self, proxy):
@@ -193,16 +210,18 @@ if __name__ == "__main__":
 
     # print(proxymanager.get_random_good_proxy())
 
-    # proxymanager.fetch_sources(require_anonymity = False)
-    old_len = len(proxymanager.good_proxies)
-    proxymanager.check_bad_proxies(require_anonymity = False)
-    new_len = len(proxymanager.good_proxies)
-    print(old_len, new_len)
+    proxymanager.fetch_sources(require_anonymity = False)
+    # proxymanager.check_good_proxies()
+    
+    # old_len = len(proxymanager.good_proxies)
+    # proxymanager.check_bad_proxies(require_anonymity = False)
+    # new_len = len(proxymanager.good_proxies)
+    # print(old_len, new_len)
 
-    old_len = len(proxymanager.good_proxies)
-    proxymanager.check_good_proxies(require_anonymity = False)
-    new_len = len(proxymanager.good_proxies)
-    print(old_len, new_len)
+    # old_len = len(proxymanager.good_proxies)
+    # proxymanager.check_good_proxies(require_anonymity = False)
+    # new_len = len(proxymanager.good_proxies)
+    # print(old_len, new_len)
 
 
     proxymanager.export_proxy_manager()

@@ -2,7 +2,6 @@ import asyncio, aiohttp
 import logging
 import json
 import datetime
-import requests
 
 LOGGER = logging.getLogger("proxy_manager")
 
@@ -89,39 +88,38 @@ class Proxy():
         else:
             return None
 
-    async def test(self, require_anonymity=False):
-        LOGGER.info("[Proxy] testing proxy %s", str(self))
+    async def test(self, session, require_anonymity=False):
+        # LOGGER.info("[Proxy] testing proxy %s", str(self))
         proxy_url = self.get_url()
-        async with aiohttp.ClientSession() as session:
-            try:
-                async with session.get("http://httpbin.org/ip",
-                                        proxy=proxy_url, timeout=5
-                                        ) as response:
-                    response_json = await response.json()
-            except (
-                json.decoder.JSONDecodeError,
-                aiohttp.client_exceptions.ClientProxyConnectionError,
-                aiohttp.client_exceptions.ServerDisconnectedError,
-                aiohttp.client_exceptions.ContentTypeError,
-                aiohttp.client_exceptions.ClientOSError,
-                aiohttp.client_exceptions.ClientResponseError,
-                aiohttp.client_exceptions.ClientPayloadError
-                ):
-                LOGGER.info("[Proxy] Proxy connection error")
-                return False
-            except asyncio.TimeoutError:
-                LOGGER.info("[Proxy] Proxy connection timeout")
-                return False
-            success = False
-            if response_json is not None and "origin" in response_json:
-                success = True
-                LOGGER.info("[Proxy] Connection success")          
-                if require_anonymity:
-                    if response_json['origin'].split(',')[0] == self.host:
-                        LOGGER.info("[Proxy] Anonymity success")
-                    else:
-                        success = False
-                        LOGGER.info("[Proxy] Anonymity fail")
-            else:
-                LOGGER.info("[Proxy] Malformed json")          
-            return success
+        try:
+            async with session.get("http://httpbin.org/ip",
+                                    proxy=proxy_url, timeout=5
+                                    ) as response:
+                response_json = await response.json()
+        except (
+            json.decoder.JSONDecodeError,
+            aiohttp.client_exceptions.ClientProxyConnectionError,
+            aiohttp.client_exceptions.ServerDisconnectedError,
+            aiohttp.client_exceptions.ContentTypeError,
+            aiohttp.client_exceptions.ClientOSError,
+            aiohttp.client_exceptions.ClientResponseError,
+            aiohttp.client_exceptions.ClientPayloadError
+            ):
+            # LOGGER.info("[Proxy] Proxy connection error")
+            return False
+        except asyncio.TimeoutError:
+            # LOGGER.info("[Proxy] Proxy connection timeout")
+            return False
+        success = False
+        if response_json is not None and "origin" in response_json:
+            success = True
+            # LOGGER.info("[Proxy] %s connection success", str(self))
+            if require_anonymity:
+                if response_json['origin'].split(',')[0] == self.host:
+                    LOGGER.info("[Proxy] Anonymity success")
+                else:
+                    success = False
+                    LOGGER.info("[Proxy] Anonymity fail")
+        else:
+            LOGGER.info("[Proxy] Malformed json")          
+        return success
